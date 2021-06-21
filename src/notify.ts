@@ -1,8 +1,8 @@
-import * as vscode from "vscode";
+import * as vscode from "coc.nvim";
 import * as path from "path";
 import fetch from "node-fetch";
 
-async function notifyGame(endpoint) {
+async function notifyGame(endpoint: string) {
   const gameUrl = vscode.workspace.getConfiguration("fuior").get("gameServerURL");
   const url = `${gameUrl}${endpoint}`;
   try {
@@ -22,16 +22,16 @@ async function notifyGame(endpoint) {
   
 export function activateNotify(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand("fuior.runInGame", () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) {
+    vscode.commands.registerCommand("fuior.runInGame", async () => {
+      const currentDocument = await vscode.workspace.document;
+      if (!currentDocument) {
         vscode.window.showErrorMessage("No fuior file is open");
         return;
       }
 
       const data = JSON.stringify({
-        data: editor.document.getText(),
-        filename: path.basename(editor.document.uri.fsPath),
+        data: currentDocument.textDocument.getText(),
+        filename: path.basename(vscode.Uri.parse(currentDocument.uri).fsPath),
       });
 
       const base64Encoded = Buffer.from(data, "utf8").toString("base64");

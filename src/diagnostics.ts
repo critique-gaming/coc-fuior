@@ -1,8 +1,9 @@
-import * as vscode from "vscode";
+import * as vscode from "coc.nvim";
 import debounce = require("lodash.debounce");
-import { chunk, DebouncedFunc } from "lodash";
+import { DebouncedFunc } from "lodash";
 import * as path from "path";
 import * as cp from "child_process";
+import { stat } from "fs";
 
 class DiagnosticHandler {
   document: vscode.TextDocument;
@@ -32,7 +33,7 @@ class DiagnosticHandler {
   }
 
   async findSubdir(pathComponents: string[]): Promise<string | null> {
-    let fsPath = this.document.uri.fsPath;
+    let fsPath = vscode.Uri.parse(this.document.uri).fsPath;
     if (!fsPath) return null;
     while (true) {
       const dirname = path.dirname(fsPath);
@@ -42,7 +43,12 @@ class DiagnosticHandler {
       const exePath = path.join(dirname, ...pathComponents);
 
       try {
-        await vscode.workspace.fs.stat(vscode.Uri.file(exePath));
+        await new Promise((resolve, reject) => {
+          stat(exePath, (err, data) => {
+            if (err) reject(err);
+            resolve(data);
+          });
+        });
         return exePath;
       } catch (ex) {}
     }
@@ -73,7 +79,7 @@ class DiagnosticHandler {
 
   async getHeaderPath(): Promise<string | null> {
     const path = await this.findSubdir(["config.fui"]);
-    if (path === this.document.uri.fsPath) return null;
+    if (path === vscode.Uri.parse(this.document.uri).fsPath) return null;
     return path;
   }
 
@@ -88,7 +94,7 @@ class DiagnosticHandler {
 
     const fuiorArgs = ["-", "--no-generate", "--error-ranges"];
 
-    const workspaceDir = vscode.workspace.getWorkspaceFolder(this.document.uri).uri.fsPath;
+    const workspaceDir = vscode.Uri.parse(vscode.workspace.getWorkspaceFolder(this.document.uri).uri).fsPath;
     if (workspaceDir) {
       fuiorArgs.push("--import-root");
       fuiorArgs.push(workspaceDir);
@@ -140,8 +146,8 @@ class DiagnosticHandler {
       const message = match[6];
 
       diagnostics.push(
-        new vscode.Diagnostic(
-          new vscode.Range(startRow, startColumn, endRow, endColumn),
+        vscode.Diagnostic.create(
+          vscode.Range.create(startRow, startColumn, endRow, endColumn),
           message,
           errorType === "ERROR"
             ? vscode.DiagnosticSeverity.Error
@@ -194,7 +200,7 @@ export function refreshDiagnostics(
   handler.refresh();
 }
 
-export const activateDiagnostics = (
+export const activateDiagnostics = async (
   context: vscode.ExtensionContext
 ) => {
   const fuiorDiagnostics = vscode.languages.createDiagnosticCollection("fuior");
@@ -202,24 +208,19 @@ export const activateDiagnostics = (
 
   const handlers = new Map<vscode.TextDocument, DiagnosticHandler>();
 
-  if (vscode.window.activeTextEditor) {
+  const currentDocument = await vscode.workspace.document;
+
+  if (currentDocument) {
     refreshDiagnostics(
-      vscode.window.activeTextEditor.document,
+      currentDocument.textDocument,
       fuiorDiagnostics,
       handlers
     );
   }
-  context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor((editor) => {
-      if (editor) {
-        refreshDiagnostics(editor.document, fuiorDiagnostics, handlers);
-      }
-    })
-  );
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((e) =>
-      refreshDiagnostics(e.document, fuiorDiagnostics, handlers)
+      refreshDiagnostics(vscode.workspace.getDocument(e.bufnr).textDocument, fuiorDiagnostics, handlers)
     )
   );
 
