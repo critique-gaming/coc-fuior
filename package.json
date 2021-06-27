@@ -3,7 +3,7 @@
     "displayName": "Fuior",
     "description": "Language support for Fuior (narrative DSL)",
     "homepage": "https://github.com/critique-gaming/vscode-language-fuior",
-    "version": "0.5.1",
+    "version": "0.5.2",
     "publisher": "critique-gaming",
     "license": "MIT",
     "icon": "images/icon.png",
